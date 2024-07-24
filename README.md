@@ -1,7 +1,7 @@
 # Terraform_repo
 TERRAFORM INSTALLATION
 
-Sure, I can help with that! Here's a step-by-step guide to installing Terraform on RHEL 9, along with some key insights about Terraform.
+Here's a step-by-step guide to installing Terraform on RHEL 9, along with some key insights about Terraform.
 
 ### **Installing Terraform on RHEL 9**
 
