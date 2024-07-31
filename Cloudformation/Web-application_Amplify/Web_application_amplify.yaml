@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # Amplify Application
+  AmplifyApp:
+    Type: "AWS::Amplify::App"
+    Properties:
+      Name: "MyFrontendApp"
+      Repository: "https://github.com/your-frontend-repo"
+      OAuthToken: "YOUR_GITHUB_OAUTH_TOKEN"
+  
+  # DynamoDB Table
+  UserDataTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      TableName: "UserData"
+      AttributeDefinitions:
+        - AttributeName: "UserID"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "UserID"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  
+  # IAM Role for Lambda with full DynamoDB access
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "LambdaDynamoDBFullAccessRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "DynamoDBFullAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "dynamodb:*"
+                Resource: "*"
+  
+  # Lambda Function
+  MyLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: "MyLambdaFunction"
+      Handler: "index.handler"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: "your-bucket-name"
+        S3Key: "lambda-code.zip"
+      Runtime: "nodejs14.x"
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref UserDataTable
+  
+  # API Gateway Rest API
+  MyApiGateway:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: "MyApi"
+      Description: "API Gateway for Lambda Integration"
+  
+  # API Gateway Resource
+  MyApiResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      ParentId: !GetAtt MyApiGateway.RootResourceId
+      PathPart: "users"
+      RestApiId: !Ref MyApiGateway
+  
+  # API Gateway Method
+  MyApiMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      RestApiId: !Ref MyApiGateway
+      ResourceId: !Ref MyApiResource
+      HttpMethod: "POST"
+      AuthorizationType: "NONE"
+      Integration:
+        IntegrationHttpMethod: "POST"
+        Type: "AWS_PROXY"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations"
+  
+  # API Gateway Deployment
+  ApiGatewayDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref MyApiGateway
+      StageName: "prod"
+    DependsOn: MyApiMethod
+  
+  # Lambda Permission for API Gateway
+  LambdaInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyApiGateway}/*/POST/users"
